@@ -26,8 +26,12 @@ class Whitewash
 
   # _whitelist_ is expected to be loaded from xhtml.yaml.
   #
-  def initialize(whitelist = Whitewash.default_whitelist)
+  def initialize(whitelist = Whitewash.default_whitelist, html5 = false)
     @whitelist = whitelist
+    if (@html5 = html5)
+      @fixes = []
+      init_html5_fixes
+    end
   end
 
   attr_reader :xhtml
@@ -95,7 +99,9 @@ class Whitewash
 
     sanitize_element(xml, whitelist, &p)
 
-    xml.to_xhtml
+    xml = xml.to_xhtml
+    @fixes.each { |proc| proc.(xml) } if @html5
+    xml
   end
 
   private
@@ -105,5 +111,16 @@ class Whitewash
            '/usr/local/share/whitewash/' ]
 
   WHITELIST = 'whitelist.yaml'
+
+  def init_html5_fixes
+    w = []
+    %w{wbr source keygen}.each do |word|
+      re = %r{><\/#{word}>}
+      w << word if Nokogiri::HTML::fragment("<#{word} />").to_xhtml =~ re
+    end
+    unless w.empty?
+      @fixes << lambda {|html| html.gsub!(/><\/(#{w.join('|')})>/, ' />')}
+    end
+  end
 
 end
